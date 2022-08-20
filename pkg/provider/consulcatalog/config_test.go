@@ -12,8 +12,9 @@ import (
 	"github.com/traefik/traefik/v2/pkg/tls"
 )
 
-func Int(v int) *int    { return &v }
-func Bool(v bool) *bool { return &v }
+func Int(v int) *int       { return &v }
+func Bool(v bool) *bool    { return &v }
+func Int64(v int64) *int64 { return &v }
 
 func TestDefaultRule(t *testing.T) {
 	testCases := []struct {
@@ -557,6 +558,95 @@ func Test_buildConfiguration(t *testing.T) {
 									},
 								},
 								PassHostHeader: Bool(true),
+							},
+						},
+					},
+					ServersTransports: map[string]*dynamic.ServersTransport{},
+				},
+			},
+		},
+		{
+			desc: "two containers with traffic mirroring",
+			items: []itemData{
+				{
+					ID:   "1",
+					Node: "Node1",
+					Name: "Test",
+					Labels: map[string]string{
+						"traefik.http.routers.Test.rule":                                     "Host(`Test.traefik.wtf`)",
+						"traefik.http.routers.Test.service":                                  "Mirroring",
+						"traefik.http.services.Test.loadbalancer.passhostheader":             "true",
+						"traefik.http.services.Mirroring.mirroring.service":                  "Test",
+						"traefik.http.services.Mirroring.mirroring.mirrors.mirror01.name":    "Test2",
+						"traefik.http.services.Mirroring.mirroring.mirrors.mirror01.percent": "10",
+					},
+					Address: "127.0.0.1",
+					Port:    "80",
+					Status:  api.HealthPassing,
+				},
+				{
+					ID:      "2",
+					Node:    "Node1",
+					Name:    "Test2",
+					Labels:  map[string]string{},
+					Address: "127.0.0.2",
+					Port:    "80",
+					Status:  api.HealthPassing,
+				},
+			},
+			expected: &dynamic.Configuration{
+				TCP: &dynamic.TCPConfiguration{
+					Routers:     map[string]*dynamic.TCPRouter{},
+					Middlewares: map[string]*dynamic.TCPMiddleware{},
+					Services:    map[string]*dynamic.TCPService{},
+				},
+				UDP: &dynamic.UDPConfiguration{
+					Routers:  map[string]*dynamic.UDPRouter{},
+					Services: map[string]*dynamic.UDPService{},
+				},
+				HTTP: &dynamic.HTTPConfiguration{
+					Routers: map[string]*dynamic.Router{
+						"Test": {
+							Service: "Mirroring",
+							Rule:    "Host(`Test.traefik.wtf`)",
+						},
+						"Test2": {
+							Service: "Test2",
+							Rule:    "Host(`Test2.traefik.wtf`)",
+						},
+					},
+					Middlewares: map[string]*dynamic.Middleware{},
+					Services: map[string]*dynamic.Service{
+						"Test": {
+							LoadBalancer: &dynamic.ServersLoadBalancer{
+								Servers: []dynamic.Server{
+									{
+										URL: "http://127.0.0.1:80",
+									},
+								},
+								PassHostHeader: Bool(true),
+							},
+						},
+						"Test2": {
+							LoadBalancer: &dynamic.ServersLoadBalancer{
+								Servers: []dynamic.Server{
+									{
+										URL: "http://127.0.0.2:80",
+									},
+								},
+								PassHostHeader: Bool(true),
+							},
+						},
+						"Mirroring": {
+							Mirroring: &dynamic.Mirroring{
+								Service:     "Test",
+								MaxBodySize: Int64(int64(-1)),
+								Mirrors: []dynamic.MirrorService{
+									{
+										Name:    "Test2",
+										Percent: 10,
+									},
+								},
 							},
 						},
 					},

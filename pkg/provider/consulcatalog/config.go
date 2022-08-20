@@ -182,9 +182,12 @@ func (p *Provider) buildServiceConfiguration(item itemData, configuration *dynam
 	}
 
 	for _, service := range configuration.Services {
-		if err := p.addServer(item, service.LoadBalancer); err != nil {
-			return err
+		if service.Mirroring == nil && service.Weighted == nil && service.Failover == nil {
+			if err := p.addServer(item, service.LoadBalancer); err != nil {
+				return err
+			}
 		}
+
 	}
 
 	return nil
